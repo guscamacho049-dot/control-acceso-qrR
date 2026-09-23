@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Control de Acceso QR</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f2f2f2;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 18px;
+    }
+
+    .contenedor {
+      width: 100%;
+      max-width: 500px;
+      background: white;
+      border-radius: 22px;
+      padding: 22px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.12);
+    }
+
+    h1 {
+      text-align: center;
+      margin: 5px 0;
+      font-size: 27px;
+    }
+
+    .subtitulo {
+      text-align: center;
+      color: #777;
+      margin: 8px 0 20px;
+    }
+
+    #reader {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 16px;
+    }
+
+    #resultado {
+      margin-top: 18px;
+      min-height: 150px;
+      border-radius: 18px;
+      padding: 22px;
+      text-align: center;
+      background: #f1f1f1;
+    }
+
+    .icono {
+      width: 65px;
+      height: 65px;
+      border-radius: 50%;
+      margin: 0 auto 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 38px;
+      font-weight: bold;
+    }
+
+    .verde {
+      background: #16a34a;
+    }
+
+    .rojo {
+      background: #dc2626;
+    }
+
+    .gris {
+      background: #666;
+    }
+
+    .titulo {
+      font-size: 25px;
+      font-weight: 800;
+    }
+
+    .nombre {
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    .detalle {
+      margin-top: 8px;
+      color: #666;
+      line-height: 1.5;
+    }
+
+    button {
+      width: 100%;
+      border: none;
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 16px;
+      background: #111;
+      color: white;
+      font-size: 17px;
+      font-weight: bold;
+    }
+
+    #estado {
+      text-align: center;
+      color: #777;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="contenedor">
+
+    <h1>CONTROL DE ACCESO</h1>
+
+    <div class="subtitulo">
+      Escanea el código QR del invitado
+    </div>
+
+    <div id="reader"></div>
+
+    <div id="resultado">
+
+      <div class="icono gris">
+        QR
+      </div>
+
+      <div class="titulo">
+        LISTO PARA ESCANEAR
+      </div>
+
+      <div class="detalle">
+        Apunta la cámara al código QR.
+      </div>
+
+    </div>
+
+    <button onclick="reiniciar()">
+      ESCANEAR SIGUIENTE
+    </button>
+
+    <div id="estado">
+      Iniciando cámara...
+    </div>
+
+  </div>
+
+
+<script>
+
+const API =
+"https://script.google.com/macros/s/AKfycbyjJ0-hMf86T27Sy8qjy_SGNnqPBOxYXVPBlh_BnnncnacDWItSV8PtjL97LyZ6q2WH/exec";
+
+let scanner = null;
+let procesando = false;
+
+
+/* =========================
+   INICIAR CÁMARA
+========================= */
+
+function iniciarScanner() {
+
+  procesando = false;
+
+  scanner = new Html5Qrcode("reader");
+
+  scanner.start(
+    {
+      facingMode: "environment"
+    },
+    {
+      fps: 10,
+      qrbox: {
+        width: 250,
+        height: 250
+      }
+    },
+
+    function(codigo) {
+
+      if (procesando) {
+        return;
+      }
+
+      procesando = true;
+
+      document.getElementById("estado").innerText =
+        "Código detectado. Verificando...";
+
+      scanner.stop()
+        .then(function() {
+          validarCodigo(codigo);
+        })
+        .catch(function() {
+          validarCodigo(codigo);
+        });
+
+    },
+
+    function(error) {
+
+      /* Errores normales mientras busca QR */
+      
+    }
+
+  )
+
+  .then(function() {
+
+    document.getElementById("estado").innerText =
+      "Cámara activa • Esperando QR";
+
+  })
+
+  .catch(function(error) {
+
+    document.getElementById("estado").innerText =
+      "No se pudo activar la cámara.";
+
+    mostrarError(
+      "CÁMARA NO DISPONIBLE",
+      "Permite el acceso a la cámara en Safari."
+    );
+
+  });
+
+}
+
+
+/* =========================
+   VALIDAR QR
+========================= */
+
+function validarCodigo(codigo) {
+
+  mostrarCargando();
+
+  const callback =
+    "respuestaQR_" + Date.now();
+
+  window[callback] = function(respuesta) {
+
+    mostrarResultado(respuesta);
+
+    delete window[callback];
+
+  };
+
+  const script =
+    document.createElement("script");
+
+  script.src =
+    API +
+    "?api=validar" +
+    "&codigo=" +
+    encodeURIComponent(codigo) +
+    "&callback=" +
+    callback;
+
+  script.onerror = function() {
+
+    mostrarError(
+      "ERROR DEL SISTEMA",
+      "No se pudo conectar con el sistema de acceso."
+    );
+
+    delete window[callback];
+
+  };
+
+  document.body.appendChild(script);
+
+}
+
+
+/* =========================
+   MOSTRAR RESULTADO
+========================= */
+
+function mostrarResultado(respuesta) {
+
+  const resultado =
+    document.getElementById("resultado");
+
+
+  if (respuesta.tipo === "VALIDO") {
+
+    resultado.innerHTML = `
+
+      <div class="icono verde">
+        ✓
+      </div>
+
+      <div class="titulo"
+           style="color:#16a34a">
+
+        ACCESO VÁLIDO
+
+      </div>
+
+      <div class="nombre">
+        ${respuesta.nombre}
+      </div>
+
+      <div class="detalle">
+
+        Invitado #${respuesta.id}
+
+        <br>
+
+        Entrada registrada:
+        ${respuesta.hora}
+
+      </div>
+
+    `;
+
+    document.getElementById("estado").innerText =
+      "Entrada registrada correctamente.";
+
+    return;
+  }
+
+
+  if (respuesta.tipo === "UTILIZADO") {
+
+    resultado.innerHTML = `
+
+      <div class="icono rojo">
+        !
+      </div>
+
+      <div class="titulo"
+           style="color:#dc2626">
+
+        QR YA UTILIZADO
+
+      </div>
+
+      <div class="nombre">
+        ${respuesta.nombre}
+      </div>
+
+      <div class="detalle">
+
+        Esta invitación ya registró una entrada.
+
+        <br><br>
+
+        Primera entrada:
+        ${respuesta.hora}
+
+      </div>
+
+    `;
+
+    document.getElementById("estado").innerText =
+      "Entrada rechazada.";
+
+    return;
+  }
+
+
+  mostrarError(
+    respuesta.titulo,
+    respuesta.mensaje
+  );
+
+}
+
+
+/* =========================
+   CARGANDO
+========================= */
+
+function mostrarCargando() {
+
+  document.getElementById("resultado").innerHTML = `
+
+    <div class="icono gris">
+      ...
+    </div>
+
+    <div class="titulo">
+      VERIFICANDO
+    </div>
+
+    <div class="detalle">
+      Consultando lista de invitados...
+    </div>
+
+  `;
+
+}
+
+
+/* =========================
+   ERROR
+========================= */
+
+function mostrarError(titulo, mensaje) {
+
+  document.getElementById("resultado").innerHTML = `
+
+    <div class="icono rojo">
+      ✕
+    </div>
+
+    <div class="titulo"
+         style="color:#dc2626">
+
+      ${titulo}
+
+    </div>
+
+    <div class="detalle">
+      ${mensaje}
+    </div>
+
+  `;
+
+  document.getElementById("estado").innerText =
+    "Código rechazado.";
+
+}
+
+
+/* =========================
+   REINICIAR
+========================= */
+
+function reiniciar() {
+
+  document.getElementById("resultado").innerHTML = `
+
+    <div class="icono gris">
+      QR
+    </div>
+
+    <div class="titulo">
+      LISTO PARA ESCANEAR
+    </div>
+
+    <div class="detalle">
+      Apunta la cámara al código QR.
+    </div>
+
+  `;
+
+  document.getElementById("estado").innerText =
+    "Iniciando cámara...";
+
+  iniciarScanner();
+
+}
+
+
+/* =========================
+   INICIO
+========================= */
+
+window.onload = function() {
+
+  iniciarScanner();
+
+};
+
+</script>
+
+</body>
+</html>
